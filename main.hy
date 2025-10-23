@@ -6,20 +6,23 @@
 (setv LETTERS (list "eariotnslcudpmhgbfywkvxzjq"))
 (setv CONSONANTS (list "qjzxvkwfbghmpdclsntr"))
 (setv VOWELS (list "yuoiae"))
-(setv HEADERS { "User-Agent" "contact@dkl9.net" })
+(setv HEADERS {})
 (setv RARE (re.compile "([a-z]+)<[Bb][Rr]>"))
 (setv req-count 0)
 
 (defn weightify [l]
-    (list (itertools.chain #* (map #%(itertools.repeat (get %1 1) (inc (get %1 0))) (enumerate l)))))
+    (list (itertools.chain #* (map
+        #%(itertools.repeat (get %1 1) (inc (get %1 0)))
+        (enumerate l)))))
 
 (defn ias-url [s]
     (setv proto "https://")
-    (setv dn "new.wordsmith.org")
+    (setv domain "new.wordsmith.org")
     (setv path "/anagram/anagram.cgi")
-    (setv params f"?anagram={s}&language=english&t=10&d=1&include=&exclude=&n=&m=&a=n&l=n&q=n&k=0&source=adv")
-    (+ proto dn path params))
-
+    (setv params (+
+        f"?anagram={s}&language=english&t=10&d=1&include="
+        f"&exclude=&n=&m=&a=n&l=n&q=n&k=0&source=adv"))
+    (+ proto domain path params))
 
 (defn get-anagrams [s]
     (global req-count)
@@ -27,57 +30,64 @@
     (+= req-count 1)
     (if (in "No anagrams found." resp.text)
         []
-        (let [sr (.split resp.text "Displaying all:")]
-            (assert (= (len sr) 2))
-            (re.findall RARE (get sr 1)))))
+        (let [#(_, words) (.split resp.text "Displaying all:")]
+            (re.findall RARE words))))
 
 (defn pick-letters [n]
-    (setv cp 0 vp 0 rw "")
+    (setv consonant-prop 0 vowel-prop 0 word "")
     (for [i (range n)]
-        (if (> (random.random) (/ (inc cp) (inc vp) 3))
-            (do (setv cp (inc cp) rw (+ rw (random.choice (weightify CONSONANTS)))))
-            (do (setv vp (inc vp) rw (+ rw (random.choice (weightify VOWELS)))))))
-    rw)
+        (if (> (random.random) (/ (inc consonant-prop) (inc vowel-prop) 3))
+            (setv consonant-prop (inc consonant-prop)
+                word (+ word (random.choice (weightify CONSONANTS))))
+            (setv vowel-prop (inc vowel-prop)
+                word (+ word (random.choice (weightify VOWELS))))))
+    word)
 
-(defn gen-puzzle [n k]
-    (if (= k 1)
+(defn gen-puzzle [base-len added-len]
+    (if (= added-len 1)
         (while True
-            (setv ewl [])
-            (while (not (setx ewl (get-anagrams (setx sew (pick-letters (+ n k)))))))
-            (for [i (range (len sew))]
-                (setv bwl (get-anagrams (setx tw (+ (cut sew i) (cut sew (inc i) None)))))
-                (setv tw (get sew i))
-                (when bwl (break)))
-            (if bwl
-                (do (setv bword (random.choice bwl)) (break))
-                (print f"{ewl} is bad for contraction")))
+            (setv fulls [])
+            (while (not (setx fulls (get-anagrams (setx letters
+                (pick-letters (+ base-len added-len)))))))
+            (for [i (range (len letters))]
+                (setv bases (get-anagrams (setx addend
+                    (+ (cut letters i) (cut letters (inc i) None)))))
+                (setv addend (get letters i))
+                (when bases (break)))
+            (if bases
+                (do (setv bword (random.choice bases)) (break))
+                (print f"{fulls} is bad for contraction")))
         (while True
-            (setv bwl [])
-            (while (not (setx bwl (get-anagrams (setx tw (pick-letters n))))))
-            (setv bword (random.choice bwl))
-            (for [t (range (max 12 (* n k)))]
-                (setv ewl (get-anagrams (+ bword (setx tw (pick-letters k)))))
-                (when ewl (break)))
-            (if ewl (break) (print f"{bword} is bad for extension"))))
-    #(bword tw ewl))
+            (setv bases [])
+            (while (not (setx bases (get-anagrams (setx addend
+                (pick-letters base-len))))))
+            (setv bword (random.choice bases))
+            (for [t (range (max 12 (* base-len added-len)))]
+                (setv fulls (get-anagrams (+ bword (setx addend
+                    (pick-letters added-len)))))
+                (when fulls (break)))
+            (if fulls (break) (print f"{bword} is bad for extension"))))
+    #(bword addend fulls))
 
-(defn play-puzzle [base ext full]
-    (setv lel (list ext))
-    (random.shuffle lel)
-    (print f"Anagram {base} + {(.join " " lel)} ({(len full)} solutions): ")
-    (setv pg (.split (.lower (input))))
-    (if (and pg (in (get pg 0) full))
+(defn play-puzzle [base ext fulls]
+    (setv letters (list ext))
+    (random.shuffle letters)
+    (print :end "" :flush True
+        f"Anagram {base} + {(.join " " letters)} ({(len fulls)} solutions): ")
+    (setv player-guess (.split (.lower (input))))
+    (if (and player-guess (in (get player-guess 0) fulls))
         (do
-            (if (= (len full) 1)
+            (if (= (len fulls) 1)
                 (print f"Correct, uniquely")
-                (do (full.remove (get pg 0)) (print f"Correct, also: {(.join ", " full)}")))
+                (do (fulls.remove (get player-guess 0))
+                    (print f"Correct, also: {(.join ", " fulls)}")))
             True)
-        (do (print f"Wrong, solutions were: {(.join ", " full)}") False)))
+        (do (print f"Wrong, solutions were: {(.join ", " fulls)}") False)))
 
-(defn show-puzzle [base ext full]
-    (setv lel (list ext))
-    (random.shuffle lel)
-    (print f"{base} + {(.join " " lel)} ({(len full)})"))
+(defn show-puzzle [base ext fulls]
+    (setv letters (list ext))
+    (random.shuffle letters)
+    (print f"{base} + {(.join " " letters)} ({(len fulls)})"))
 
 (for [i (range 1 4)]
     (for [j (range 3 7)]
