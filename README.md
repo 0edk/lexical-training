@@ -8,3 +8,6 @@ To run: install [Hy]( https://hylang.org/ ), then
 ```sh
 hy main.hy
 ```
+
+The program finds anagrams by web requests to [Internet Anagram Server]( https://wordsmith.org/anagram/about.html ).
+Please use responsibly.
